@@ -170,6 +170,21 @@ footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-soft);
 .action-btn:hover{opacity:.88;}
 .action-btn.whatsapp{background:#25D366;color:#fff;}
 .action-btn.pptx{background:#D04423;color:#fff;}
+/* Modal WhatsApp */
+.wpp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+.wpp-overlay.open{display:flex;animation:fadeUp .2s ease;}
+.wpp-modal{background:#fff;border-radius:16px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden;}
+.wpp-modal-head{background:#25D366;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.wpp-modal-head h3{color:#fff;font-size:15px;font-weight:700;margin:0;}
+.wpp-modal-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 4px;}
+.wpp-modal-body{padding:16px 20px;}
+.wpp-preview{background:#ECE5DD;border-radius:10px;padding:14px 16px;font-size:13px;line-height:1.6;color:#1a1a1a;white-space:pre-wrap;max-height:360px;overflow-y:auto;font-family:var(--font);}
+.wpp-modal-foot{padding:12px 20px;display:flex;gap:10px;border-top:1px solid var(--border-soft);}
+.wpp-btn{flex:1;padding:10px;border-radius:9px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:.15s opacity;}
+.wpp-btn:hover{opacity:.88;}
+.wpp-btn.copy{background:var(--raised);color:var(--text);border:1px solid var(--border);}
+.wpp-btn.open{background:#25D366;color:#fff;}
+.wpp-copied{font-size:11px;color:var(--acc-grn);text-align:center;margin-top:6px;min-height:16px;}
 @media(max-width:900px){.cat-strip{grid-template-columns:repeat(3,1fr);}.grid2,.kpi-row{grid-template-columns:1fr;}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
@@ -274,6 +289,24 @@ footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-soft);
     <span id="footerDate"></span>
   </footer>
 </div>
+</div>
+
+<!-- Modal WhatsApp -->
+<div class="wpp-overlay" id="wppOverlay" onclick="fecharWpp(event)">
+  <div class="wpp-modal">
+    <div class="wpp-modal-head">
+      <h3>📱 Prévia da mensagem</h3>
+      <button class="wpp-modal-close" onclick="fecharWpp()">✕</button>
+    </div>
+    <div class="wpp-modal-body">
+      <div class="wpp-preview" id="wppPreview"></div>
+      <div class="wpp-copied" id="wppCopied"></div>
+    </div>
+    <div class="wpp-modal-foot">
+      <button class="wpp-btn copy" onclick="copiarWpp()">📋 Copiar mensagem</button>
+      <button class="wpp-btn open" onclick="abrirWpp()">💬 Abrir no WhatsApp</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -516,20 +549,23 @@ function fmtBppShort(cashout,gmv){ return gmv>0 ? (cashout/gmv*100).toFixed(3)+"
 // ══════════════════════════════════════════════
 //  WHATSAPP
 // ══════════════════════════════════════════════
+let _wppMsgRaw = "";
+
 function gerarWhatsApp(){
   const rows=filteredRows();
   const gmv=filteredGmv();
   const cashTotal=rows.reduce((a,r)=>a+r.cashout,0);
-
   const weeks=weekFilter.size?[...weekFilter].sort():(DATA.meta.weeks||[]);
-  const svcs =svcFilter.size ?[...svcFilter].sort() :(DATA.meta.svcs||[]);
-  const svcLabel = svcs.join(" + ").replace(" - Santos","").replace(" - Sao Vicente II"," - SV II");
-
+  const svcs=svcFilter.size?[...svcFilter].sort():(DATA.meta.svcs||[]);
+  const svcLabel=svcs.map(s=>s.replace("SSP15 - Santos","SSP15 Santos").replace("SSP46 - Sao Vicente II","SSP46 São Vicente II")).join(" + ");
   const CAT_EMOJI={Damaged:"🟣",Fraud:"🟠",Lost:"🔴",Stolen:"🔺",Delayed:"🔵"};
 
-  let msg = `📊 *BPP Semanal — ${svcLabel} · ${weeks.join("/")}*\n`;
-  msg += `*BPP%: ${fmtBppShort(cashTotal,gmv)}* | Cashout: U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
-  msg += `GMV Total: U$ ${gmv.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  let msg=`📊 *BPP Semanal — ${svcLabel} · ${weeks.join("/")}*\n`;
+  msg+=`━━━━━━━━━━━━━━━━━━━\n`;
+  msg+=`📌 *BPP%: ${fmtBppShort(cashTotal,gmv)}*\n`;
+  msg+=`💰 Cashout: U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  msg+=`📦 GMV: U$ ${gmv.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  msg+=`━━━━━━━━━━━━━━━━━━━\n`;
 
   CATS.forEach(cat=>{
     const cr=rows.filter(r=>r.cat===cat);
@@ -537,21 +573,50 @@ function gerarWhatsApp(){
     const cash=cr.reduce((a,r)=>a+r.cashout,0);
     const bpp=gmv>0?(cash/gmv*100).toFixed(3)+"%":"—";
     const topLg=aggBy(cr,"lg",3);
-    msg+=`\n${CAT_EMOJI[cat]} *${cat}:*\n`;
-    msg+=`BPP%: ${bpp}\n`;
-    msg+=`Cashout: U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
-    msg+=`Pacotes: ${cr.length}\n`;
+    msg+=`\n${CAT_EMOJI[cat]} *${cat}*\n`;
+    msg+=`  BPP%: *${bpp}*\n`;
+    msg+=`  Cashout: U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+    msg+=`  Pacotes: ${cr.length.toLocaleString("pt-BR")}\n`;
     if(topLg.length){
-      msg+=`Tramos: ${topLg.map(t=>`${t.label} (${t.pct.toFixed(1)}%)`).join(" | ")}\n`;
+      msg+=`  📍 Tramos:\n`;
+      topLg.forEach(t=>{ msg+=`    • ${t.label}: ${t.pct.toFixed(1)}%\n`; });
     }
   });
+  msg+=`\n━━━━━━━━━━━━━━━━━━━\n`;
+  msg+=`_Gerado em ${DATA.meta.generated_at} via Dashboard BPP Meli_`;
 
-  msg+=`\n_Gerado em ${DATA.meta.generated_at}_`;
-
-  const url=`https://wa.me/?text=${encodeURIComponent(msg)}`;
-  window.open(url,"_blank");
+  _wppMsgRaw=msg;
+  document.getElementById("wppPreview").textContent=msg;
+  document.getElementById("wppCopied").textContent="";
+  document.getElementById("wppOverlay").classList.add("open");
 }
 window.gerarWhatsApp=gerarWhatsApp;
+
+function fecharWpp(e){
+  if(!e||e.target===document.getElementById("wppOverlay")||e.type==="click"&&!e.target.closest(".wpp-modal")){
+    document.getElementById("wppOverlay").classList.remove("open");
+  }
+}
+window.fecharWpp=fecharWpp;
+
+function copiarWpp(){
+  navigator.clipboard.writeText(_wppMsgRaw).then(()=>{
+    document.getElementById("wppCopied").textContent="✓ Mensagem copiada! Cole no WhatsApp.";
+    setTimeout(()=>document.getElementById("wppCopied").textContent="",3000);
+  }).catch(()=>{
+    // fallback para ambientes sem clipboard API
+    const ta=document.createElement("textarea");
+    ta.value=_wppMsgRaw; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+    document.getElementById("wppCopied").textContent="✓ Mensagem copiada!";
+  });
+}
+window.copiarWpp=copiarWpp;
+
+function abrirWpp(){
+  window.open(`https://wa.me/?text=${encodeURIComponent(_wppMsgRaw)}`,"_blank");
+}
+window.abrirWpp=abrirWpp;
 
 // ══════════════════════════════════════════════
 //  PPTX (via PptxGenJS CDN)
@@ -573,139 +638,156 @@ function _buildPPTX(){
   const cashTotal=rows.reduce((a,r)=>a+r.cashout,0);
   const weeks=weekFilter.size?[...weekFilter].sort():(DATA.meta.weeks||[]);
   const svcs=svcFilter.size?[...svcFilter].sort():(DATA.meta.svcs||[]);
-  const svcLabel=svcs.join(" + ");
+  const svcLabel=svcs.map(s=>s.replace(" - Santos"," Santos").replace(" - Sao Vicente II"," SV II")).join(" + ");
   const weekLabel=weeks.join(" / ");
   const bppTotal=fmtBppShort(cashTotal,gmv);
 
   const pptx=new PptxGenJS();
   pptx.layout="LAYOUT_WIDE";
-  pptx.theme={headFontFace:"Calibri",bodyFontFace:"Calibri"};
 
-  const ML_BLUE="#2D3277", ML_YELLOW="#FFE600", DARK="#2D3138", MUTED="#6B7280";
-  const CAT_COLORS={Damaged:"#7C6FE0",Fraud:"#F5A623",Lost:"#E74C5E",Stolen:"#E8550A",Delayed:"#3483FA"};
+  const ML_BLUE="2D3277", ML_YELLOW="FFE600", WHITE="FFFFFF";
+  const LIGHT_BG="F5F6FA", CARD_BG="FFFFFF", MUTED="8C93A8", DARK="1E2130", BORDER="E3E5EA";
+  const CAT_COL={Damaged:"7C6FE0",Fraud:"F5A623",Lost:"E74C5E",Stolen:"E8550A",Delayed:"3483FA"};
+  const CAT_LIGHT={Damaged:"EEE9FD",Fraud:"FFF3E0",Lost:"FFEBEE",Stolen:"FFF0EC",Delayed:"E3F2FD"};
 
-  // ── Slide 1: Capa ──────────────────────────
+  const addSlideHeader=(sl,title,sub)=>{
+    sl.background={color:LIGHT_BG};
+    sl.addShape(pptx.ShapeType.rect,{x:0,y:0,w:0.18,h:"100%",fill:{color:ML_BLUE}});
+    sl.addShape(pptx.ShapeType.rect,{x:0.18,y:0,w:"100%",h:0.72,fill:{color:ML_BLUE}});
+    sl.addText("Meli · Loss Prevention",{x:0.4,y:0.05,w:6,h:0.3,color:ML_YELLOW,fontSize:9,bold:true,fontFace:"Calibri"});
+    sl.addText(title,{x:0.4,y:0.3,w:9,h:0.38,color:WHITE,fontSize:16,bold:true,fontFace:"Calibri"});
+    if(sub) sl.addText(sub,{x:9.5,y:0.3,w:3.6,h:0.38,color:"D0D4E8",fontSize:9,align:"right",fontFace:"Calibri"});
+    sl.addShape(pptx.ShapeType.rect,{x:0.18,y:7.22,w:"100%",h:0.28,fill:{color:ML_BLUE}});
+    sl.addText(`Gerado em ${DATA.meta.generated_at}  ·  ${svcLabel}  ·  ${weekLabel}`,{x:0.4,y:7.23,w:12.5,h:0.24,color:"8899CC",fontSize:8,fontFace:"Calibri"});
+  };
+
+  const kpiCard=(sl,x,y,w,h,label,val,sub,color)=>{
+    sl.addShape(pptx.ShapeType.roundRect,{x,y,w,h,fill:{color:CARD_BG},line:{color:BORDER,pt:1},rectRadius:0.08});
+    sl.addShape(pptx.ShapeType.rect,{x,y,w,h:0.06,fill:{color:color},line:{color:color}});
+    sl.addText(label.toUpperCase(),{x:x+0.12,y:y+0.1,w:w-0.24,h:0.22,color:MUTED,fontSize:7.5,bold:true,fontFace:"Calibri"});
+    sl.addText(val,{x:x+0.12,y:y+0.3,w:w-0.24,h:0.45,color:DARK,fontSize:18,bold:true,fontFace:"Calibri"});
+    if(sub) sl.addText(sub,{x:x+0.12,y:y+0.72,w:w-0.24,h:0.22,color:MUTED,fontSize:8,fontFace:"Calibri"});
+  };
+
+  const hBar=(sl,x,y,w,label,val,pct,maxW,color,idx)=>{
+    const barW=Math.max(pct/100*maxW,0.05);
+    const yy=y+idx*0.34;
+    sl.addText(label,{x,y:yy,w:2.6,h:0.28,color:DARK,fontSize:8.5,fontFace:"Calibri",valign:"middle"});
+    sl.addShape(pptx.ShapeType.rect,{x:x+2.7,y:yy+0.05,w:maxW,h:0.18,fill:{color:"EEF0F5"},line:{color:"E3E5EA"}});
+    sl.addShape(pptx.ShapeType.rect,{x:x+2.7,y:yy+0.05,w:barW,h:0.18,fill:{color},line:{color}});
+    sl.addText(val,{x:x+2.7+maxW+0.05,y:yy,w:1.5,h:0.28,color:DARK,fontSize:8,fontFace:"Calibri",bold:true});
+    sl.addText(pct.toFixed(1)+"%",{x:x+2.7+maxW+1.0,y:yy,w:0.6,h:0.28,color:"9CA3AF",fontSize:8,fontFace:"Calibri",align:"right"});
+  };
+
+  // ══ Slide 1: Capa ══════════════════════════════════════
   const s1=pptx.addSlide();
-  s1.background={color:"F8F9FB"};
-  s1.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:0.6,fill:{color:ML_BLUE}});
-  s1.addText("Meli · Loss Prevention",{x:0.3,y:0.1,w:9,h:0.4,color:ML_YELLOW,fontSize:11,bold:true});
-  s1.addText("Relatório de Perdas Logísticas — BPP",{x:0.5,y:1.2,w:12,h:0.8,color:DARK,fontSize:28,bold:true});
-  s1.addText(`${svcLabel}  ·  ${weekLabel}`,{x:0.5,y:2.1,w:12,h:0.4,color:MUTED,fontSize:14});
-  s1.addShape(pptx.ShapeType.rect,{x:0.5,y:2.8,w:3.2,h:1.4,fill:{color:ML_BLUE},line:{color:ML_BLUE}});
-  s1.addText("Índice BPP%",{x:0.5,y:2.85,w:3.2,h:0.35,color:ML_YELLOW,fontSize:10,align:"center",bold:true});
-  s1.addText(bppTotal,{x:0.5,y:3.15,w:3.2,h:0.7,color:"FFFFFF",fontSize:28,align:"center",bold:true});
-  s1.addShape(pptx.ShapeType.rect,{x:4.1,y:2.8,w:3.2,h:1.4,fill:{color:"F0F2FF"},line:{color:ML_BLUE}});
-  s1.addText("Total Cashout",{x:4.1,y:2.85,w:3.2,h:0.35,color:ML_BLUE,fontSize:10,align:"center",bold:true});
-  s1.addText(`U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}`,{x:4.1,y:3.15,w:3.2,h:0.7,color:DARK,fontSize:18,align:"center",bold:true});
-  s1.addShape(pptx.ShapeType.rect,{x:7.7,y:2.8,w:3.2,h:1.4,fill:{color:"F0F2FF"},line:{color:ML_BLUE}});
-  s1.addText("GMV Total",{x:7.7,y:2.85,w:3.2,h:0.35,color:ML_BLUE,fontSize:10,align:"center",bold:true});
-  s1.addText(`U$ ${gmv.toLocaleString("pt-BR",{maximumFractionDigits:0})}`,{x:7.7,y:3.15,w:3.2,h:0.7,color:DARK,fontSize:18,align:"center",bold:true});
-  s1.addText(`Gerado em ${DATA.meta.generated_at}`,{x:0.5,y:6.8,w:12,h:0.3,color:MUTED,fontSize:9,align:"right"});
+  s1.background={color:ML_BLUE};
+  s1.addShape(pptx.ShapeType.rect,{x:9.8,y:0,w:3.53,h:7.5,fill:{color:"252A6A"},line:{color:"252A6A"}});
+  s1.addShape(pptx.ShapeType.ellipse,{x:9.2,y:1.8,w:5,h:5,fill:{color:"1F2460"},line:{color:"1F2460"}});
+  s1.addShape(pptx.ShapeType.rect,{x:0.4,y:2.5,w:6.5,h:0.07,fill:{color:ML_YELLOW},line:{color:ML_YELLOW}});
+  s1.addText("MERCADO LIVRE",{x:0.4,y:0.8,w:7,h:0.4,color:"8899CC",fontSize:11,bold:true,charSpacing:4,fontFace:"Calibri"});
+  s1.addText("Loss Prevention",{x:0.4,y:1.2,w:7,h:0.35,color:ML_YELLOW,fontSize:13,fontFace:"Calibri"});
+  s1.addText("Relatório de Perdas\nLogísticas — BPP",{x:0.4,y:1.65,w:8,h:0.95,color:WHITE,fontSize:30,bold:true,fontFace:"Calibri",lineSpacingMultiple:1.1});
+  s1.addText(svcLabel,{x:0.4,y:2.72,w:8,h:0.38,color:"C0C8E8",fontSize:13,fontFace:"Calibri"});
+  s1.addText(weekLabel,{x:0.4,y:3.1,w:8,h:0.32,color:"8899CC",fontSize:11,fontFace:"Calibri"});
+  [{label:"Índice BPP%",val:bppTotal,y:4.1,color:ML_YELLOW},
+   {label:"Total Cashout",val:"U$ "+cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2}),y:5.2,color:"8899CC"},
+   {label:"GMV Total",val:"U$ "+gmv.toLocaleString("pt-BR",{maximumFractionDigits:0}),y:6.1,color:"8899CC"},
+  ].forEach(k=>{
+    s1.addText(k.label.toUpperCase(),{x:0.4,y:k.y,w:5,h:0.24,color:"8899CC",fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+    s1.addText(k.val,{x:0.4,y:k.y+0.22,w:7,h:0.52,color:k.color,fontSize:k.label==="Índice BPP%"?26:16,bold:true,fontFace:"Calibri"});
+  });
 
-  // ── Slide 2: Visão Geral por Categoria ─────
+  // ══ Slide 2: Visão Geral ═══════════════════════════════
   const s2=pptx.addSlide();
-  s2.background={color:"F8F9FB"};
-  s2.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:0.5,fill:{color:ML_BLUE}});
-  s2.addText("Visão Geral por Categoria",{x:0.3,y:0.08,w:12,h:0.35,color:"FFFFFF",fontSize:13,bold:true});
-  s2.addText(`${svcLabel} · ${weekLabel} · BPP% Total: ${bppTotal}`,{x:0.3,y:0.42,w:12,h:0.3,color:ML_YELLOW,fontSize:9});
-
-  const tblRows=[
-    [{text:"Categoria",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
-     {text:"Pacotes",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
-     {text:"Cashout (U$)",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
-     {text:"BPP%",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
-     {text:"% do Cashout",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
-     {text:"Top Tramo",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}}]
-  ];
-  CATS.forEach(cat=>{
+  addSlideHeader(s2,"Visão Geral por Categoria",`BPP% Total: ${bppTotal}`);
+  kpiCard(s2,0.3,0.9,3.0,1.05,"Total Cashout",`U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2})}`,`${rows.length.toLocaleString("pt-BR")} pacotes`,ML_BLUE);
+  kpiCard(s2,3.5,0.9,3.0,1.05,"Índice BPP%",bppTotal,`GMV: U$ ${gmv.toLocaleString("pt-BR",{maximumFractionDigits:0})}`,ML_BLUE);
+  kpiCard(s2,6.7,0.9,3.0,1.05,"Semana(s)",weekLabel,svcLabel,"555555");
+  kpiCard(s2,9.9,0.9,3.1,1.05,"Gerado em",DATA.meta.generated_at,"Dashboard BPP Meli","555555");
+  s2.addText("DISTRIBUIÇÃO POR CATEGORIA",{x:0.3,y:2.15,w:6,h:0.25,color:MUTED,fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+  CATS.forEach((cat,i)=>{
+    const cr=rows.filter(r=>r.cat===cat);
+    const cash=cr.reduce((a,r)=>a+r.cashout,0);
+    const pct=cashTotal>0?100*cash/cashTotal:0;
+    hBar(s2,0.3,2.45,4.8,cat,`U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2})}`,pct,4.8,CAT_COL[cat],i);
+  });
+  s2.addText("DETALHAMENTO",{x:7.0,y:2.15,w:6,h:0.25,color:MUTED,fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+  const tRows=[[
+    {text:"Categoria",options:{bold:true,color:WHITE,fill:{color:ML_BLUE},fontSize:8}},
+    {text:"Pac.",options:{bold:true,color:WHITE,fill:{color:ML_BLUE},fontSize:8,align:"center"}},
+    {text:"Cashout",options:{bold:true,color:WHITE,fill:{color:ML_BLUE},fontSize:8,align:"right"}},
+    {text:"BPP%",options:{bold:true,color:WHITE,fill:{color:ML_BLUE},fontSize:8,align:"center"}},
+    {text:"% Cash",options:{bold:true,color:WHITE,fill:{color:ML_BLUE},fontSize:8,align:"center"}},
+  ]];
+  CATS.forEach((cat,i)=>{
     const cr=rows.filter(r=>r.cat===cat);
     if(!cr.length) return;
     const cash=cr.reduce((a,r)=>a+r.cashout,0);
-    const pctCash=(100*cash/cashTotal).toFixed(1)+"%";
-    const bpp=fmtBppShort(cash,gmv);
-    const topLg=aggBy(cr,"lg",1);
-    const topLabel=topLg.length?`${topLg[0].label} (${topLg[0].pct.toFixed(0)}%)`:"—";
-    tblRows.push([
-      {text:cat,options:{color:CAT_COLORS[cat],bold:true}},
-      {text:cr.length.toLocaleString("pt-BR"),options:{align:"center"}},
-      {text:"U$ "+cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}),options:{align:"right"}},
-      {text:bpp,options:{align:"center",bold:true}},
-      {text:pctCash,options:{align:"center"}},
-      {text:topLabel,options:{fontSize:9}}
+    const fill=i%2===0?"FAFBFF":CARD_BG;
+    tRows.push([
+      {text:cat,options:{color:"3C3C3C",fill:{color:fill},fontSize:9,bold:true}},
+      {text:cr.length.toLocaleString("pt-BR"),options:{align:"center",fill:{color:fill},fontSize:9}},
+      {text:"U$ "+cash.toLocaleString("pt-BR",{minimumFractionDigits:2}),options:{align:"right",fill:{color:fill},fontSize:9}},
+      {text:fmtBppShort(cash,gmv),options:{align:"center",fill:{color:fill},fontSize:9,bold:true,color:CAT_COL[cat]}},
+      {text:(cashTotal>0?100*cash/cashTotal:0).toFixed(1)+"%",options:{align:"center",fill:{color:fill},fontSize:9}},
     ]);
   });
-  s2.addTable(tblRows,{x:0.3,y:0.85,w:12.4,colW:[1.8,1.2,2.4,1.3,1.5,4.2],border:{type:"solid",color:"E3E5EA"},fontSize:10,autoPage:false,rowH:0.45});
+  s2.addTable(tRows,{x:7.0,y:2.45,w:6.0,colW:[1.8,0.9,2.0,1.0,0.9],border:{type:"solid",color:BORDER},rowH:0.38,autoPage:false});
 
-  // ── Slides por Categoria ───────────────────
+  // ══ Slides por Categoria ═══════════════════════════════
   CATS.forEach(cat=>{
     const cr=rows.filter(r=>r.cat===cat);
     if(!cr.length) return;
     const cash=cr.reduce((a,r)=>a+r.cashout,0);
     const bpp=fmtBppShort(cash,gmv);
-    const accent=CAT_COLORS[cat];
+    const accent=CAT_COL[cat];
     const lgItems=aggBy(cr,"lg");
-    const mlpItems=aggBy(cr,"mlp",5);
+    const mlpItems=aggBy(cr,"mlp",6);
     const nodeItems=aggBy(cr,"node_lm",5);
+    const causaItems=aggBy(cr,"causa",5);
 
     const sc=pptx.addSlide();
-    sc.background={color:"F8F9FB"};
-    sc.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:0.5,fill:{color:accent}});
-    sc.addText(cat,{x:0.3,y:0.08,w:12,h:0.35,color:"FFFFFF",fontSize:14,bold:true});
-    sc.addText(`${svcLabel} · ${weekLabel}`,{x:0.3,y:0.42,w:12,h:0.3,color:"FFFFFF",fontSize:9});
+    addSlideHeader(sc,cat,`BPP% ${bpp}`);
+    sc.addShape(pptx.ShapeType.rect,{x:0.18,y:0.68,w:"100%",h:0.06,fill:{color:accent},line:{color:accent}});
 
-    // KPIs
-    [
-      {label:"BPP%",val:bpp,x:0.3},
-      {label:"Cashout",val:"U$ "+cash.toLocaleString("pt-BR",{minimumFractionDigits:2}),x:3.5},
-      {label:"Pacotes",val:cr.length.toLocaleString("pt-BR"),x:6.7},
-      {label:"GMV Total",val:"U$ "+gmv.toLocaleString("pt-BR",{maximumFractionDigits:0}),x:9.9},
-    ].forEach(k=>{
-      sc.addShape(pptx.ShapeType.rect,{x:k.x,y:0.7,w:2.9,h:0.85,fill:{color:"F0F2FF"},line:{color:accent}});
-      sc.addText(k.label,{x:k.x,y:0.72,w:2.9,h:0.28,color:accent,fontSize:8,align:"center",bold:true});
-      sc.addText(k.val,{x:k.x,y:0.98,w:2.9,h:0.4,color:DARK,fontSize:14,align:"center",bold:true});
+    kpiCard(sc,0.3,0.88,2.8,1.02,"Índice BPP%",bpp,`cat. cashout / GMV total`,accent);
+    kpiCard(sc,3.25,0.88,2.8,1.02,"Cashout",`U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2})}`,`${(cashTotal>0?100*cash/cashTotal:0).toFixed(1)}% do total`,accent);
+    kpiCard(sc,6.2,0.88,2.8,1.02,"Pacotes",cr.length.toLocaleString("pt-BR"),`${(100*cr.length/(rows.length||1)).toFixed(1)}% do total`,accent);
+    kpiCard(sc,9.15,0.88,3.85,1.02,"GMV do período",`U$ ${gmv.toLocaleString("pt-BR",{maximumFractionDigits:0})}`,`base do cálculo BPP%`,"555555");
+
+    sc.addText("CLASIFICACION LG",{x:0.3,y:2.1,w:5,h:0.24,color:MUTED,fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+    lgItems.slice(0,7).forEach((i,idx)=>{
+      hBar(sc,0.3,2.4,3.5,i.label,`U$ ${i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2})}`,i.pct,3.5,accent,idx);
     });
 
-    // Tabela de LG
-    const t1=[[ {text:"Clasificacion LG",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"Pac.",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"Cashout",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"BPP%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}} ]];
-    lgItems.slice(0,8).forEach(i=>{
-      t1.push([i.label,i.shp.toLocaleString("pt-BR"),
-        "U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),
-        fmtBppShort(i.cashout,gmv),i.pct.toFixed(1)+"%"]);
+    sc.addText("TOP MLPs",{x:7.0,y:2.1,w:5,h:0.24,color:MUTED,fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+    const mlpT=[[
+      {text:"MLP",options:{bold:true,color:WHITE,fill:{color:accent},fontSize:8}},
+      {text:"Pac.",options:{bold:true,color:WHITE,fill:{color:accent},fontSize:8,align:"center"}},
+      {text:"Cashout",options:{bold:true,color:WHITE,fill:{color:accent},fontSize:8,align:"right"}},
+      {text:"%",options:{bold:true,color:WHITE,fill:{color:accent},fontSize:8,align:"center"}},
+    ]];
+    mlpItems.forEach((i,idx)=>{
+      const fill=idx%2===0?"FAFBFF":CARD_BG;
+      mlpT.push([
+        {text:i.label,options:{fill:{color:fill},fontSize:8}},
+        {text:i.shp.toLocaleString("pt-BR"),options:{align:"center",fill:{color:fill},fontSize:8}},
+        {text:"U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),options:{align:"right",fill:{color:fill},fontSize:8}},
+        {text:i.pct.toFixed(1)+"%",options:{align:"center",fill:{color:fill},fontSize:8,color:accent,bold:true}},
+      ]);
     });
-    sc.addText("Por Clasificacion LG",{x:0.3,y:1.65,w:6,h:0.3,color:accent,fontSize:10,bold:true});
-    sc.addTable(t1,{x:0.3,y:1.95,w:6.0,colW:[2.8,0.7,1.5,0.8,0.7],border:{type:"solid",color:"E3E5EA"},fontSize:9,rowH:0.32});
+    sc.addTable(mlpT,{x:7.0,y:2.4,w:6.0,colW:[2.8,0.8,2.1,0.9],border:{type:"solid",color:BORDER},rowH:0.34,autoPage:false});
 
-    // Tabela de MLP
-    const t2=[[ {text:"MLP",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"Pac.",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"Cashout",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}} ]];
-    mlpItems.forEach(i=>{
-      t2.push([i.label,i.shp.toLocaleString("pt-BR"),
-        "U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),i.pct.toFixed(1)+"%"]);
-    });
-    sc.addText("Top MLPs",{x:6.7,y:1.65,w:5.8,h:0.3,color:accent,fontSize:10,bold:true});
-    sc.addTable(t2,{x:6.7,y:1.95,w:5.8,colW:[2.8,0.8,1.7,0.7],border:{type:"solid",color:"E3E5EA"},fontSize:9,rowH:0.32});
-
-    // Nodes
-    const t3=[[ {text:"Node LM",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"Pac.",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"Cashout",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
-                {text:"%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}} ]];
-    nodeItems.forEach(i=>{
-      t3.push([i.label,i.shp.toLocaleString("pt-BR"),
-        "U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),i.pct.toFixed(1)+"%"]);
-    });
-    sc.addText("Por Node LM",{x:0.3,y:5.1,w:6.0,h:0.3,color:accent,fontSize:10,bold:true});
-    sc.addTable(t3,{x:0.3,y:5.4,w:6.0,colW:[2.8,0.7,1.8,0.7],border:{type:"solid",color:"E3E5EA"},fontSize:9,rowH:0.32});
-    sc.addText(`Gerado em ${DATA.meta.generated_at}`,{x:0.3,y:7.0,w:12.4,h:0.25,color:MUTED,fontSize:8,align:"right"});
+    const yBot=5.2;
+    sc.addShape(pptx.ShapeType.rect,{x:0.3,y:yBot-0.08,w:12.7,h:0.02,fill:{color:BORDER},line:{color:BORDER}});
+    sc.addText("CAUSA BPP BRUTA",{x:0.3,y:yBot,w:6,h:0.24,color:MUTED,fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+    sc.addText("NODES LM",{x:7.0,y:yBot,w:5,h:0.24,color:MUTED,fontSize:8,bold:true,charSpacing:2,fontFace:"Calibri"});
+    causaItems.slice(0,5).forEach((i,idx)=>{ hBar(sc,0.3,yBot+0.3,3.5,i.label,`U$ ${i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2})}`,i.pct,3.5,accent,idx); });
+    nodeItems.slice(0,5).forEach((i,idx)=>{ hBar(sc,7.0,yBot+0.3,3.4,i.label,`U$ ${i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2})}`,i.pct,3.4,accent,idx); });
   });
 
-  pptx.writeFile({fileName:`BPP_${svcs.join("_")}_${weekLabel}.pptx`});
+  pptx.writeFile({fileName:`BPP_${svcs.map(s=>s.replace(/[^a-zA-Z0-9]/g,"_")).join("_")}_${weekLabel.replace(/\//g,"-")}.pptx`});
 }
 
 function fmtUsd(v){return "U$ "+Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});}
