@@ -165,6 +165,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:
 .litem .sw{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 .litem b{color:var(--text);font-weight:600;}
 footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-soft);color:var(--faint);font-size:11px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;}
+.action-bar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+.action-btn{display:flex;align-items:center;gap:8px;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:.15s opacity;font-family:var(--font);}
+.action-btn:hover{opacity:.88;}
+.action-btn.whatsapp{background:#25D366;color:#fff;}
+.action-btn.pptx{background:#D04423;color:#fff;}
 @media(max-width:900px){.cat-strip{grid-template-columns:repeat(3,1fr);}.grid2,.kpi-row{grid-template-columns:1fr;}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
@@ -214,9 +219,25 @@ footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-soft);
 
   <div class="week-filter-bar" id="weekFilterBar"></div>
 
-  <div class="kpi-hero">
+  <div class="kpi-hero" style="grid-template-columns:repeat(3,1fr);">
     <div class="kpi-big"><div class="lbl">Total de Pacotes (classificados)</div><div class="val" id="kpiTotalShp">—</div></div>
     <div class="kpi-big"><div class="lbl">Total Cashout</div><div class="val" id="kpiTotalCash">—</div></div>
+    <div class="kpi-big" style="border-left:4px solid var(--ml-blue);">
+      <div class="lbl">Índice BPP%</div>
+      <div class="val" id="kpiBpp" style="color:var(--ml-blue);">—</div>
+      <div class="sub" style="margin-top:4px;">cashout / GMV total</div>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <button class="action-btn whatsapp" onclick="gerarWhatsApp()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Enviar por WhatsApp
+    </button>
+    <button class="action-btn pptx" onclick="gerarPPTX()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8" fill="none" stroke="white" stroke-width="2"/><line x1="16" y1="13" x2="8" y2="13" fill="none" stroke="white" stroke-width="2"/><line x1="16" y1="17" x2="8" y2="17" fill="none" stroke="white" stroke-width="2"/><polyline points="10 9 9 9 8 9" fill="none" stroke="white" stroke-width="2"/></svg>
+      Gerar PPTX
+    </button>
   </div>
 
   <div class="cat-strip" id="catStrip"></div>
@@ -350,19 +371,31 @@ function processCSV(text){
   const iNodeId=idx("NODE_ID"), iDom=idx("Dominio"), iCash=idx("Bpp Cashout Usd");
   const iDriver=idx("Driver_ID"), iRegion=idx("REGION"), iDStatus=idx("Driver Status");
 
-  const rows=[], weeks=new Set(), svcs=new Set();
-  let unmap=[];
+  const rows=[], weeks=new Set(), svcs=new Set(), gmvMap={}, unmap=[];
+
+
+  const iGmv = header.findIndex(c=>c.trim()==='TotalGMV (std)');
 
   for(let i=1;i<lines.length;i++){
     if(!lines[i].trim()) continue;
     const cols=lines[i].split(";");
     const cash=parseMoney(cols[iCash]);
+    const week=(cols[iWeek]||"").trim();
+    const svc=(cols[iSvc]||"").trim();
+
+    // Acumula GMV de TODAS as linhas (preenchido nas linhas sem BPP)
+    if(iGmv>=0){
+      const gmv=parseMoney(cols[iGmv]);
+      if(gmv>0){
+        const key=week+"|"+svc;
+        gmvMap[key]=(gmvMap[key]||0)+gmv;
+      }
+    }
+
     if(cash<=0) continue;
     const lg=cols[iLG]||"";
     const cat=categoriaLG(lg);
     if(!cat){ if(lg.trim()&&lg.trim()!=="VISUALIZAR GMV") unmap.push(lg.trim()); continue; }
-    const week=(cols[iWeek]||"").trim();
-    const svc=(cols[iSvc]||"").trim();
     if(week) weeks.add(week);
     if(svc)  svcs.add(svc);
     rows.push({
@@ -403,7 +436,7 @@ function processCSV(text){
 
   DATA = {
     meta:{weeks:allWeeks, svcs:[...svcs].sort(), region:regionVal, generated_at:new Date().toLocaleDateString("pt-BR")},
-    rows, tendencia,
+    rows, tendencia, gmv:gmvMap,
   };
   return DATA;
 }
@@ -467,8 +500,214 @@ function resetToUpload(){
 window.resetToUpload=resetToUpload;
 
 // ══════════════════════════════════════════════
-//  FUNÇÕES DE FORMATAÇÃO
+//  GMV + BPP RATIO
 // ══════════════════════════════════════════════
+function filteredGmv(){
+  if(!DATA||!DATA.gmv) return 0;
+  const allWeeks = weekFilter.size ? [...weekFilter] : (DATA.meta.weeks||[]);
+  const allSvcs  = svcFilter.size  ? [...svcFilter]  : (DATA.meta.svcs||[]);
+  let total=0;
+  allWeeks.forEach(w=>allSvcs.forEach(s=>{ total+=(DATA.gmv[w+"|"+s]||0); }));
+  return total;
+}
+function fmtBpp(cashout,gmv){ return gmv>0 ? (cashout/gmv*100).toFixed(4)+"%" : "—"; }
+function fmtBppShort(cashout,gmv){ return gmv>0 ? (cashout/gmv*100).toFixed(3)+"%" : "—"; }
+
+// ══════════════════════════════════════════════
+//  WHATSAPP
+// ══════════════════════════════════════════════
+function gerarWhatsApp(){
+  const rows=filteredRows();
+  const gmv=filteredGmv();
+  const cashTotal=rows.reduce((a,r)=>a+r.cashout,0);
+
+  const weeks=weekFilter.size?[...weekFilter].sort():(DATA.meta.weeks||[]);
+  const svcs =svcFilter.size ?[...svcFilter].sort() :(DATA.meta.svcs||[]);
+  const svcLabel = svcs.join(" + ").replace(" - Santos","").replace(" - Sao Vicente II"," - SV II");
+
+  const CAT_EMOJI={Damaged:"🟣",Fraud:"🟠",Lost:"🔴",Stolen:"🔺",Delayed:"🔵"};
+
+  let msg = `📊 *BPP Semanal — ${svcLabel} · ${weeks.join("/")}*\n`;
+  msg += `*BPP%: ${fmtBppShort(cashTotal,gmv)}* | Cashout: U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  msg += `GMV Total: U$ ${gmv.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+
+  CATS.forEach(cat=>{
+    const cr=rows.filter(r=>r.cat===cat);
+    if(!cr.length) return;
+    const cash=cr.reduce((a,r)=>a+r.cashout,0);
+    const bpp=gmv>0?(cash/gmv*100).toFixed(3)+"%":"—";
+    const topLg=aggBy(cr,"lg",3);
+    msg+=`\n${CAT_EMOJI[cat]} *${cat}:*\n`;
+    msg+=`BPP%: ${bpp}\n`;
+    msg+=`Cashout: U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+    msg+=`Pacotes: ${cr.length}\n`;
+    if(topLg.length){
+      msg+=`Tramos: ${topLg.map(t=>`${t.label} (${t.pct.toFixed(1)}%)`).join(" | ")}\n`;
+    }
+  });
+
+  msg+=`\n_Gerado em ${DATA.meta.generated_at}_`;
+
+  const url=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url,"_blank");
+}
+window.gerarWhatsApp=gerarWhatsApp;
+
+// ══════════════════════════════════════════════
+//  PPTX (via PptxGenJS CDN)
+// ══════════════════════════════════════════════
+function gerarPPTX(){
+  if(!window.PptxGenJS){
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
+    s.onload=()=>_buildPPTX();
+    s.onerror=()=>alert("Não foi possível carregar a biblioteca PPTX. Verifique sua conexão com a internet.");
+    document.head.appendChild(s);
+  } else { _buildPPTX(); }
+}
+window.gerarPPTX=gerarPPTX;
+
+function _buildPPTX(){
+  const rows=filteredRows();
+  const gmv=filteredGmv();
+  const cashTotal=rows.reduce((a,r)=>a+r.cashout,0);
+  const weeks=weekFilter.size?[...weekFilter].sort():(DATA.meta.weeks||[]);
+  const svcs=svcFilter.size?[...svcFilter].sort():(DATA.meta.svcs||[]);
+  const svcLabel=svcs.join(" + ");
+  const weekLabel=weeks.join(" / ");
+  const bppTotal=fmtBppShort(cashTotal,gmv);
+
+  const pptx=new PptxGenJS();
+  pptx.layout="LAYOUT_WIDE";
+  pptx.theme={headFontFace:"Calibri",bodyFontFace:"Calibri"};
+
+  const ML_BLUE="#2D3277", ML_YELLOW="#FFE600", DARK="#2D3138", MUTED="#6B7280";
+  const CAT_COLORS={Damaged:"#7C6FE0",Fraud:"#F5A623",Lost:"#E74C5E",Stolen:"#E8550A",Delayed:"#3483FA"};
+
+  // ── Slide 1: Capa ──────────────────────────
+  const s1=pptx.addSlide();
+  s1.background={color:"F8F9FB"};
+  s1.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:0.6,fill:{color:ML_BLUE}});
+  s1.addText("Meli · Loss Prevention",{x:0.3,y:0.1,w:9,h:0.4,color:ML_YELLOW,fontSize:11,bold:true});
+  s1.addText("Relatório de Perdas Logísticas — BPP",{x:0.5,y:1.2,w:12,h:0.8,color:DARK,fontSize:28,bold:true});
+  s1.addText(`${svcLabel}  ·  ${weekLabel}`,{x:0.5,y:2.1,w:12,h:0.4,color:MUTED,fontSize:14});
+  s1.addShape(pptx.ShapeType.rect,{x:0.5,y:2.8,w:3.2,h:1.4,fill:{color:ML_BLUE},line:{color:ML_BLUE}});
+  s1.addText("Índice BPP%",{x:0.5,y:2.85,w:3.2,h:0.35,color:ML_YELLOW,fontSize:10,align:"center",bold:true});
+  s1.addText(bppTotal,{x:0.5,y:3.15,w:3.2,h:0.7,color:"FFFFFF",fontSize:28,align:"center",bold:true});
+  s1.addShape(pptx.ShapeType.rect,{x:4.1,y:2.8,w:3.2,h:1.4,fill:{color:"F0F2FF"},line:{color:ML_BLUE}});
+  s1.addText("Total Cashout",{x:4.1,y:2.85,w:3.2,h:0.35,color:ML_BLUE,fontSize:10,align:"center",bold:true});
+  s1.addText(`U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}`,{x:4.1,y:3.15,w:3.2,h:0.7,color:DARK,fontSize:18,align:"center",bold:true});
+  s1.addShape(pptx.ShapeType.rect,{x:7.7,y:2.8,w:3.2,h:1.4,fill:{color:"F0F2FF"},line:{color:ML_BLUE}});
+  s1.addText("GMV Total",{x:7.7,y:2.85,w:3.2,h:0.35,color:ML_BLUE,fontSize:10,align:"center",bold:true});
+  s1.addText(`U$ ${gmv.toLocaleString("pt-BR",{maximumFractionDigits:0})}`,{x:7.7,y:3.15,w:3.2,h:0.7,color:DARK,fontSize:18,align:"center",bold:true});
+  s1.addText(`Gerado em ${DATA.meta.generated_at}`,{x:0.5,y:6.8,w:12,h:0.3,color:MUTED,fontSize:9,align:"right"});
+
+  // ── Slide 2: Visão Geral por Categoria ─────
+  const s2=pptx.addSlide();
+  s2.background={color:"F8F9FB"};
+  s2.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:0.5,fill:{color:ML_BLUE}});
+  s2.addText("Visão Geral por Categoria",{x:0.3,y:0.08,w:12,h:0.35,color:"FFFFFF",fontSize:13,bold:true});
+  s2.addText(`${svcLabel} · ${weekLabel} · BPP% Total: ${bppTotal}`,{x:0.3,y:0.42,w:12,h:0.3,color:ML_YELLOW,fontSize:9});
+
+  const tblRows=[
+    [{text:"Categoria",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
+     {text:"Pacotes",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
+     {text:"Cashout (U$)",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
+     {text:"BPP%",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
+     {text:"% do Cashout",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}},
+     {text:"Top Tramo",options:{bold:true,color:"FFFFFF",fill:{color:ML_BLUE}}}]
+  ];
+  CATS.forEach(cat=>{
+    const cr=rows.filter(r=>r.cat===cat);
+    if(!cr.length) return;
+    const cash=cr.reduce((a,r)=>a+r.cashout,0);
+    const pctCash=(100*cash/cashTotal).toFixed(1)+"%";
+    const bpp=fmtBppShort(cash,gmv);
+    const topLg=aggBy(cr,"lg",1);
+    const topLabel=topLg.length?`${topLg[0].label} (${topLg[0].pct.toFixed(0)}%)`:"—";
+    tblRows.push([
+      {text:cat,options:{color:CAT_COLORS[cat],bold:true}},
+      {text:cr.length.toLocaleString("pt-BR"),options:{align:"center"}},
+      {text:"U$ "+cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}),options:{align:"right"}},
+      {text:bpp,options:{align:"center",bold:true}},
+      {text:pctCash,options:{align:"center"}},
+      {text:topLabel,options:{fontSize:9}}
+    ]);
+  });
+  s2.addTable(tblRows,{x:0.3,y:0.85,w:12.4,colW:[1.8,1.2,2.4,1.3,1.5,4.2],border:{type:"solid",color:"E3E5EA"},fontSize:10,autoPage:false,rowH:0.45});
+
+  // ── Slides por Categoria ───────────────────
+  CATS.forEach(cat=>{
+    const cr=rows.filter(r=>r.cat===cat);
+    if(!cr.length) return;
+    const cash=cr.reduce((a,r)=>a+r.cashout,0);
+    const bpp=fmtBppShort(cash,gmv);
+    const accent=CAT_COLORS[cat];
+    const lgItems=aggBy(cr,"lg");
+    const mlpItems=aggBy(cr,"mlp",5);
+    const nodeItems=aggBy(cr,"node_lm",5);
+
+    const sc=pptx.addSlide();
+    sc.background={color:"F8F9FB"};
+    sc.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:0.5,fill:{color:accent}});
+    sc.addText(cat,{x:0.3,y:0.08,w:12,h:0.35,color:"FFFFFF",fontSize:14,bold:true});
+    sc.addText(`${svcLabel} · ${weekLabel}`,{x:0.3,y:0.42,w:12,h:0.3,color:"FFFFFF",fontSize:9});
+
+    // KPIs
+    [
+      {label:"BPP%",val:bpp,x:0.3},
+      {label:"Cashout",val:"U$ "+cash.toLocaleString("pt-BR",{minimumFractionDigits:2}),x:3.5},
+      {label:"Pacotes",val:cr.length.toLocaleString("pt-BR"),x:6.7},
+      {label:"GMV Total",val:"U$ "+gmv.toLocaleString("pt-BR",{maximumFractionDigits:0}),x:9.9},
+    ].forEach(k=>{
+      sc.addShape(pptx.ShapeType.rect,{x:k.x,y:0.7,w:2.9,h:0.85,fill:{color:"F0F2FF"},line:{color:accent}});
+      sc.addText(k.label,{x:k.x,y:0.72,w:2.9,h:0.28,color:accent,fontSize:8,align:"center",bold:true});
+      sc.addText(k.val,{x:k.x,y:0.98,w:2.9,h:0.4,color:DARK,fontSize:14,align:"center",bold:true});
+    });
+
+    // Tabela de LG
+    const t1=[[ {text:"Clasificacion LG",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"Pac.",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"Cashout",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"BPP%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}} ]];
+    lgItems.slice(0,8).forEach(i=>{
+      t1.push([i.label,i.shp.toLocaleString("pt-BR"),
+        "U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),
+        fmtBppShort(i.cashout,gmv),i.pct.toFixed(1)+"%"]);
+    });
+    sc.addText("Por Clasificacion LG",{x:0.3,y:1.65,w:6,h:0.3,color:accent,fontSize:10,bold:true});
+    sc.addTable(t1,{x:0.3,y:1.95,w:6.0,colW:[2.8,0.7,1.5,0.8,0.7],border:{type:"solid",color:"E3E5EA"},fontSize:9,rowH:0.32});
+
+    // Tabela de MLP
+    const t2=[[ {text:"MLP",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"Pac.",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"Cashout",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}} ]];
+    mlpItems.forEach(i=>{
+      t2.push([i.label,i.shp.toLocaleString("pt-BR"),
+        "U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),i.pct.toFixed(1)+"%"]);
+    });
+    sc.addText("Top MLPs",{x:6.7,y:1.65,w:5.8,h:0.3,color:accent,fontSize:10,bold:true});
+    sc.addTable(t2,{x:6.7,y:1.95,w:5.8,colW:[2.8,0.8,1.7,0.7],border:{type:"solid",color:"E3E5EA"},fontSize:9,rowH:0.32});
+
+    // Nodes
+    const t3=[[ {text:"Node LM",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"Pac.",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"Cashout",options:{bold:true,color:"FFFFFF",fill:{color:accent}}},
+                {text:"%",options:{bold:true,color:"FFFFFF",fill:{color:accent}}} ]];
+    nodeItems.forEach(i=>{
+      t3.push([i.label,i.shp.toLocaleString("pt-BR"),
+        "U$ "+i.cashout.toLocaleString("pt-BR",{minimumFractionDigits:2}),i.pct.toFixed(1)+"%"]);
+    });
+    sc.addText("Por Node LM",{x:0.3,y:5.1,w:6.0,h:0.3,color:accent,fontSize:10,bold:true});
+    sc.addTable(t3,{x:0.3,y:5.4,w:6.0,colW:[2.8,0.7,1.8,0.7],border:{type:"solid",color:"E3E5EA"},fontSize:9,rowH:0.32});
+    sc.addText(`Gerado em ${DATA.meta.generated_at}`,{x:0.3,y:7.0,w:12.4,h:0.25,color:MUTED,fontSize:8,align:"right"});
+  });
+
+  pptx.writeFile({fileName:`BPP_${svcs.join("_")}_${weekLabel}.pptx`});
+}
+
 function fmtUsd(v){return "U$ "+Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtInt(v){return Number(v).toLocaleString("pt-BR");}
 function animateNumber(el,to,isMoney){
@@ -688,10 +927,14 @@ function renderCatStrip(rows){
 // ══════════════════════════════════════════════
 function renderGeral(){
   const rows=filteredRows();
+  const gmv=filteredGmv();
+  const cashTotal=rows.reduce((a,r)=>a+r.cashout,0);
   renderSvcFilter(); renderWeekFilter(); renderCatStrip(rows); renderTendencia();
   animateNumber(document.getElementById("kpiTotalShp"),rows.length,false);
-  animateNumber(document.getElementById("kpiTotalCash"),rows.reduce((a,r)=>a+r.cashout,0),true);
-  const totCash=rows.reduce((a,r)=>a+r.cashout,0)||1;
+  animateNumber(document.getElementById("kpiTotalCash"),cashTotal,true);
+  const bppEl=document.getElementById("kpiBpp");
+  if(bppEl) bppEl.textContent=gmv>0?(cashTotal/gmv*100).toFixed(4)+"%":"—";
+  const totCash=cashTotal||1;
   const catTotals=CATS.map(c=>{const cr=rows.filter(r=>r.cat===c);return{cat:c,shp:cr.length,cash:cr.reduce((a,r)=>a+r.cashout,0)};});
   renderBarChart("chartCatRanking",catTotals.map(c=>({label:CAT_META[c.cat].label,value:c.cash,text:fmtUsd(c.cash),pct:100*c.cash/totCash})),catTotals.map(c=>CAT_META[c.cat].accent));
   const mlpAgg={};
