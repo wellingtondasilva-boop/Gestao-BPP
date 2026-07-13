@@ -180,6 +180,22 @@ footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-soft);
 .acc-body tr.drillable.active-drill td{background:#EEF0FD!important;}
 .acc-body tr.drillable td:first-child{border-left:3px solid transparent;transition:.12s;}
 .acc-body tr.drillable.active-drill td:first-child{border-left-color:var(--ml-blue);}
+/* Modal WhatsApp */
+.wpp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:20px;}
+.wpp-overlay.open{display:flex;animation:fadeUp .2s ease;}
+.wpp-modal{background:#fff;border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,.25);overflow:hidden;}
+.wpp-modal-head{background:#25D366;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.wpp-modal-head h3{color:#fff;font-size:15px;font-weight:700;margin:0;}
+.wpp-modal-close{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 4px;opacity:.85;}
+.wpp-modal-close:hover{opacity:1;}
+.wpp-modal-body{padding:16px 20px;}
+.wpp-preview{background:#ECE5DD;border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.65;color:#1a1a1a;white-space:pre-wrap;max-height:340px;overflow-y:auto;font-family:var(--font);}
+.wpp-modal-foot{padding:12px 20px 16px;display:flex;gap:10px;border-top:1px solid var(--border-soft);}
+.wpp-btn{flex:1;padding:11px;border-radius:9px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:.15s opacity;}
+.wpp-btn:hover{opacity:.88;}
+.wpp-btn.copy{background:#25D366;color:#fff;}
+.wpp-btn.open-wa{background:var(--raised);color:var(--text);border:1px solid var(--border);}
+.wpp-copied{font-size:12px;color:#25D366;text-align:center;margin-top:8px;min-height:16px;font-weight:500;}
 @media(max-width:900px){.cat-strip{grid-template-columns:repeat(3,1fr);}.grid2,.kpi-row{grid-template-columns:1fr;}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
@@ -291,6 +307,24 @@ footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--border-soft);
     <span id="footerDate"></span>
   </footer>
 </div>
+</div>
+
+<!-- ═══ MODAL WHATSAPP ═══════════════════════ -->
+<div class="wpp-overlay" id="wppOverlay" onclick="if(event.target===this)fecharWpp()">
+  <div class="wpp-modal">
+    <div class="wpp-modal-head">
+      <h3>📱 Prévia da mensagem</h3>
+      <button class="wpp-modal-close" onclick="fecharWpp()">✕</button>
+    </div>
+    <div class="wpp-modal-body">
+      <div class="wpp-preview" id="wppPreview"></div>
+      <div class="wpp-copied" id="wppCopied"></div>
+    </div>
+    <div class="wpp-modal-foot">
+      <button class="wpp-btn copy" onclick="copiarWpp()">📋 Copiar mensagem</button>
+      <button class="wpp-btn open-wa" onclick="abrirWpp()">↗ Abrir no WhatsApp</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -532,22 +566,24 @@ function fmtBpp(cashout,gmv){ return gmv>0 ? (cashout/gmv*100).toFixed(4)+"%" : 
 function fmtBppShort(cashout,gmv){ return gmv>0 ? (cashout/gmv*100).toFixed(3)+"%" : "—"; }
 
 // ══════════════════════════════════════════════
-//  WHATSAPP
+//  WHATSAPP — modal com prévia e auto-cópia
 // ══════════════════════════════════════════════
+let _wppMsgRaw = "";
+
 function gerarWhatsApp(){
   const rows=filteredRows();
   const gmv=filteredGmv();
   const cashTotal=rows.reduce((a,r)=>a+r.cashout,0);
-
   const weeks=weekFilter.size?[...weekFilter].sort():(DATA.meta.weeks||[]);
-  const svcs =svcFilter.size ?[...svcFilter].sort() :(DATA.meta.svcs||[]);
-  const svcLabel = svcs.join(" + ").replace(" - Santos","").replace(" - Sao Vicente II"," - SV II");
-
+  const svcs=svcFilter.size?[...svcFilter].sort():(DATA.meta.svcs||[]);
+  const svcLabel=svcs.map(s=>s.replace("SSP15 - Santos","SSP15 Santos").replace("SSP46 - Sao Vicente II","SSP46 SV II")).join(" + ");
   const CAT_EMOJI={Damaged:"🟣",Fraud:"🟠",Lost:"🔴",Stolen:"🔺",Delayed:"🔵"};
+  const wNum=weeks.map(w=>w.split('-')[1]||w).join('/');
 
-  let msg = `📊 *BPP Semanal — ${svcLabel} · ${weeks.join("/")}*\n`;
-  msg += `*BPP%: ${fmtBppShort(cashTotal,gmv)}* | Cashout: U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
-  msg += `GMV Total: U$ ${gmv.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  let msg=`📊 *BPP Semanal — ${svcLabel} · W${wNum}*\n`;
+  msg+=`*BPP%: ${fmtBppShort(cashTotal,gmv)}* | Cashout: U$ ${cashTotal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  msg+=`GMV: U$ ${gmv.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+  msg+=`-------------------------------\n`;
 
   CATS.forEach(cat=>{
     const cr=rows.filter(r=>r.cat===cat);
@@ -556,20 +592,58 @@ function gerarWhatsApp(){
     const bpp=gmv>0?(cash/gmv*100).toFixed(3)+"%":"—";
     const topLg=aggBy(cr,"lg",3);
     msg+=`\n${CAT_EMOJI[cat]} *${cat}:*\n`;
-    msg+=`BPP%: ${bpp}\n`;
-    msg+=`Cashout: U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
-    msg+=`Pacotes: ${cr.length}\n`;
+    msg+=`   BPP%: *${bpp}*\n`;
+    msg+=`   Cashout: U$ ${cash.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}\n`;
+    msg+=`   Pacotes: ${cr.length.toLocaleString("pt-BR")}\n`;
     if(topLg.length){
-      msg+=`Tramos: ${topLg.map(t=>`${t.label} (${t.pct.toFixed(1)}%)`).join(" | ")}\n`;
+      topLg.forEach(t=>{ msg+=`   • ${t.label}: ${t.pct.toFixed(1)}%\n`; });
     }
   });
+  msg+=`-------------------------------\n`;
+  msg+=`_Gerado em ${DATA.meta.generated_at} · Dashboard BPP Meli_`;
 
-  msg+=`\n_Gerado em ${DATA.meta.generated_at}_`;
+  _wppMsgRaw = msg;
 
-  const url=`https://wa.me/?text=${encodeURIComponent(msg)}`;
-  window.open(url,"_blank");
+  // Mostra o modal
+  document.getElementById("wppPreview").textContent = msg;
+  const copiedEl = document.getElementById("wppCopied");
+  copiedEl.textContent = "";
+  document.getElementById("wppOverlay").classList.add("open");
+
+  // Auto-copia ao abrir
+  navigator.clipboard.writeText(msg).then(()=>{
+    copiedEl.textContent = "✓ Mensagem copiada automaticamente! Cole no grupo do WhatsApp.";
+  }).catch(()=>{
+    copiedEl.textContent = "Clique em 'Copiar mensagem' para copiar.";
+  });
 }
-window.gerarWhatsApp=gerarWhatsApp;
+window.gerarWhatsApp = gerarWhatsApp;
+
+function fecharWpp(){ document.getElementById("wppOverlay").classList.remove("open"); }
+window.fecharWpp = fecharWpp;
+
+function copiarWpp(){
+  const el = document.getElementById("wppCopied");
+  navigator.clipboard.writeText(_wppMsgRaw).then(()=>{
+    el.textContent = "✓ Copiado! Agora cole no WhatsApp.";
+    setTimeout(()=>{ el.textContent=""; }, 4000);
+  }).catch(()=>{
+    // fallback para browsers sem permissão de clipboard
+    const ta = document.createElement("textarea");
+    ta.value = _wppMsgRaw;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    el.textContent = "✓ Copiado!";
+    setTimeout(()=>{ el.textContent=""; }, 4000);
+  });
+}
+window.copiarWpp = copiarWpp;
+
+function abrirWpp(){
+  window.open("https://wa.me/?text="+encodeURIComponent(_wppMsgRaw), "_blank");
+}
+window.abrirWpp = abrirWpp;
 
 // ══════════════════════════════════════════════
 //  PPTX (via PptxGenJS CDN)
